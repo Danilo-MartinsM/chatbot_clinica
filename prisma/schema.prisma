@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model HistoricoConversas {
+  id             Int      @id @default(autoincrement())
+  numeroPaciente String
+  remetente      String   
+  mensagem       String
+  criadoEm       DateTime @default(now())
+
+  @@map("historico_conversas")
+}
