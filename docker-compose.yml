@@ -1,8 +1,7 @@
 services:
-  postgres:
+  evodb:
     image: postgres:15-alpine
     container_name: evolution_db_clinica
-    restart: always
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=ClinicaSenhaBanco123
@@ -11,31 +10,47 @@ services:
       - "5433:5432"
     volumes:
       - evolution_db_dados:/var/lib/postgresql/data
+    restart: always
 
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: atendai/evolution-api:v2.2.3
     container_name: evolution_api_clinica
-    restart: always
-    ports:
-      - "8080:8080"
     depends_on:
-      - postgres
+      - evodb
     environment:
-      - SERVER_TYPE=NODE
-      - SERVER_PORT=8080
-      - SERVER_URL=http://localhost:8080
+      - SERVER_URL=http://evolution-api:8080/instance/create
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=ClinicaChaveSecreta123
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      
-      # O GOLPE FINAL: Passamos as duas variáveis para calar o Prisma e a API de uma vez por todas
-      - DATABASE_CONNECTION_URI=postgresql://postgres:ClinicaSenhaBanco123@postgres:5432/evolution?schema=public
-      - DATABASE_URL=postgresql://postgres:ClinicaSenhaBanco123@postgres:5432/evolution?schema=public
-      
+      - DATABASE_CONNECTION_URI=postgresql://postgres:ClinicaSenhaBanco123@evodb:5432/evolution?schema=public
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
+    ports:
+      - "8080:8080"
     volumes:
       - evolution_dados:/evolution/instances
+    restart: always
+
+  # --- NOVO: O CÉREBRO DO CHATBOT ---
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_clinica
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=America/Fortaleza
+    volumes:
+      - n8n_dados:/home/node/.n8n
+    restart: always
 
 volumes:
   evolution_dados:
   evolution_db_dados:
+  # Novo volume para salvar os fluxos do n8n:
+  n8n_dados:
