@@ -1,38 +1,45 @@
-// 1. Nós importamos o 'Express' que acabamos de instalar
+// 1. A primeira linha do código DEVE ser o dotenv abrindo o cofre
+require('dotenv').config();
+
 const express = require('express');
-const cors = require('cors'); // 1. Importamos o pacote CORS
+const cors = require('cors');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// 2. Nós inicializamos o Express e guardamos na variável 'app'
+// 2. Nós buscamos a chave lá do arquivo .env usando o 'process.env'
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 const app = express();
-
-app.use(cors()); // 2. Avisamos o servidor: "Aceite requisições de qualquer navegador"
-
-// 3. Nós dizemos ao nosso servidor para entender mensagens no formato JSON
+app.use(cors());
 app.use(express.json());
 
-// 4. Criamos uma "Rota" de teste. Se alguém bater na porta principal ('/'), o servidor responde.
-app.get('/', function(requisicao, resposta) {
-    resposta.send('Olá! O servidor da clínica está rodando e pronto para receber mensagens.');
-});
+app.post('/webhook', async function(requisicao, resposta) {
+    const textoMensagem = requisicao.body.mensagem;
 
-// A nossa campainha (Webhook). Esperamos um POST no endereço '/webhook'
-app.post('/webhook', function(requisicao, resposta) {
+    try {
+        // 3. Buscamos o nome do modelo lá do .env também
+        const modelo = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL });
+
+        const systemPrompt = `Você é a assistente virtual de uma clínica médica.
+        Seu tom é profissional, gentil e direto.
+        Regra 1: Você NUNCA dá diagnósticos ou conselhos médicos.
+        Regra 2: Você responde apenas sobre agendamentos, preparo de exames e convênios.
+        Regra 3: Os convênios aceitos são Unimed, Bradesco e SulAmérica.
+        Mensagem do paciente: ${textoMensagem}`;
+
+        const resultadoIA = await modelo.generateContent(systemPrompt);
+        const respostaDoBot = resultadoIA.response.text();
+
+        resposta.status(200).json({ texto: respostaDoBot });
     
-    // 1. Abrimos o "pacote" JSON que chegou e pegamos os dados
-    const dadosRecebidos = requisicao.body;
-    const numeroPaciente = dadosRecebidos.numero;
-    const textoMensagem = dadosRecebidos.mensagem;
-
-    // 2. Mostramos no terminal do VS Code quem mandou e o quê
-    console.log(`\n🔔 Nova mensagem recebida!`);
-    console.log(`Paciente: ${numeroPaciente}`);
-    console.log(`Mensagem: ${textoMensagem}`);
-
-    // 3. Avisamos ao sistema do WhatsApp que recebemos o pacote (Status 200 = OK)
-    resposta.status(200).send('Mensagem recebida com sucesso!');
+    } catch (erro) {
+        console.log("❌ Erro na IA:", erro);
+        resposta.status(500).send('Erro interno do servidor');
+    }
 });
 
-// 5. Nós mandamos o servidor ligar e ficar escutando na porta 3000
-app.listen(3000, function() {
-    console.log('Servidor rodando na porta 3000! 🚀');
+// 4. Buscamos a porta do .env. Se o .env falhar por algum motivo, ele usa a 3000 como backup (o || significa OU)
+const porta = process.env.PORTA_SERVIDOR || 3000;
+
+app.listen(porta, function() {
+    console.log(`Servidor profissional rodando seguro na porta ${porta}! 🚀`);
 });
